@@ -1,0 +1,10 @@
+etc/
+new_dataset/
+lora/
+.vscode/
+__pycache__/
+fig/
+original_dataset/
+pickle/
+result/
+scripts/

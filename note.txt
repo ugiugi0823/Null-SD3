@@ -1,0 +1,2 @@
+scale 값을 5.0 에서 7.0 으로 변경함
+GUIDANCE_SCALE = 7.0
