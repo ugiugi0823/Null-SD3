@@ -1,14 +1,16 @@
 import gc, pickle, torch, argparse, os, sys
 import ptp_utils, seq_aligner
-
+import wandb
 
 from diffusers import DiffusionPipeline, DDIMScheduler, StableDiffusion3Pipeline
 from null import NullInversion
 from local import AttentionStore, show_cross_attention, run_and_display, make_controller
 
 def main(args):
-    # learning_rate = args.learning_rate
-    # optimizer = args.optimizer
+    wandb.init(project="null-sd3")  # 프로젝트 이름 설정
+    config = wandb.config
+    config.learning_rate = args.learning_rate
+    config.optimizer = args.optimizer
 
     prompt = args.prompt
     neg_prompt = args.neg_prompt
@@ -18,7 +20,7 @@ def main(args):
     DISN = StableDiffusion3Pipeline.from_pretrained("stabilityai/stable-diffusion-3-medium-diffusers", torch_dtype=torch.float32).to(device)
 
     null_inversion = NullInversion(DISN)
-    (image_gt, image_enc), x_t, uncond_embeddings, uncond_embeddings_p = null_inversion.invert(image_path, prompt, num_inner_steps=50, early_stop_epsilon=1e-5, verbose=True, do_1024=args.bigger, config=args)
+    (image_gt, image_enc), x_t, uncond_embeddings, uncond_embeddings_p = null_inversion.invert(image_path, prompt, num_inner_steps=50, early_stop_epsilon=1e-5, verbose=True, do_1024=args.bigger, config=config)
 
     torch.cuda.empty_cache()
     gc.collect()

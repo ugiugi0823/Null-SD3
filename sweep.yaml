@@ -1,0 +1,15 @@
+# sweep.yaml
+program: run.py
+method: bayes
+metric:
+  name: loss
+  goal: minimize
+parameters:
+  optimizer:
+    values: ["sgd", "adam", "rmsprop"]
+  learning_rate:
+    min: 0.0001
+    max: 0.1
+
+
+# wandb agent ugiugi/null_SD3/feh76c3a

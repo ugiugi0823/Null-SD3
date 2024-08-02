@@ -1,10 +1,11 @@
 import ptp_utils, seq_aligner
-import torch, inspect, abc, shutil
+import torch, inspect, abc, shutil, wandb
 
 
 import numpy as np
 import torch.nn.functional as nnf
 
+from torch.optim import AdamW
 from diffusers import DiffusionPipeline, StableDiffusionXLImg2ImgPipeline, AutoencoderKL, StableDiffusionPipeline, DDIMScheduler
 from typing import Optional, Union, Tuple, List, Callable, Dict
 from diffusers.utils import load_image
@@ -20,7 +21,7 @@ from compel import Compel, ReturnedEmbeddingsType
 
 LOW_RESOURCE = False
 NUM_DDIM_STEPS = 50
-GUIDANCE_SCALE = 5.0
+GUIDANCE_SCALE = 7.0
 MAX_NUM_WORDS = 77
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
@@ -649,8 +650,8 @@ class NullInversion:
         return image_rec, ddim_latents
     
     
-
-    def null_optimization(self, latents, num_inner_steps, epsilon):
+    def null_optimization(self, latents, num_inner_steps, epsilon, config):
+    # def null_optimization(self, latents, num_inner_steps, epsilon):
     
         uncond_embeddings_p, cond_embeddings_p = self.context_p.chunk(2)
         uncond_embeddings, cond_embeddings = self.context.chunk(2)
@@ -676,7 +677,17 @@ class NullInversion:
             uncond_embeddings_p = uncond_embeddings_p.clone().detach().requires_grad_(True)
             add_time_ids1 = add_time_ids1.clone().detach().requires_grad_(True)
             
-            optimizer = Adam([uncond_embeddings, uncond_embeddings_p], lr=1e-2 * (1. - i / 100.))
+            # optimizer = Adam([uncond_embeddings, uncond_embeddings_p], lr=1e-8 * (1. - i / 100.))
+            # optimizer = Adam([uncond_embeddings, uncond_embeddings_p], lr=1e-8)
+                        # 최적화 알고리즘 선택
+            if config.optimizer == "sgd":
+                optimizer = torch.optim.SGD([uncond_embeddings, uncond_embeddings_p], lr=config.learning_rate)
+            elif config.optimizer == "adam":
+                optimizer = torch.optim.Adam([uncond_embeddings, uncond_embeddings_p], lr=config.learning_rate)
+            elif config.optimizer == "rmsprop":
+                optimizer = torch.optim.RMSprop([uncond_embeddings, uncond_embeddings_p], lr=config.learning_rate)
+            
+            
             latent_prev = latents[len(latents) - i - 2]
             t = self.model.scheduler.timesteps[i]
             # print("🩵🩵 timestep =", t)
@@ -702,6 +713,7 @@ class NullInversion:
                     # bar.update()
                     break
                 optimizer.step()
+                wandb.log({"loss": loss_item})
                 loss_item = loss.item()
                 bar.set_description(f"Step {i}, Iteration {j}/{num_inner_steps}, Loss: {loss_item:.4f}")
                 
@@ -723,7 +735,7 @@ class NullInversion:
         return uncond_embeddings_list, uncond_embeddings_p_list
 
 
-    def invert(self, image_path: str, prompt: str, num_inner_steps=50, early_stop_epsilon=1e-5, verbose=False, do_1024=False):
+    def invert(self, image_path: str, prompt: str, num_inner_steps=50, early_stop_epsilon=1e-5, verbose=False, do_1024=False, config=None):
         self.init_prompt(prompt)
         ptp_utils.register_attention_control(self.model, None)
         image_gt = load_img(image_path, do_1024)
@@ -735,7 +747,8 @@ class NullInversion:
 
         if verbose:
             print("----- Null-text optimization...")
-        uncond_embeddings, uncond_embeddings_p = self.null_optimization(ddim_latents, num_inner_steps, early_stop_epsilon)
+        # uncond_embeddings, uncond_embeddings_p = self.null_optimization(ddim_latents, num_inner_steps, early_stop_epsilon)
+        uncond_embeddings, uncond_embeddings_p = self.null_optimization(ddim_latents, num_inner_steps, early_stop_epsilon, config)
         # uncond_embeddings = None
         # uncond_embeddings_p = None
         

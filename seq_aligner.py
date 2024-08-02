@@ -136,11 +136,15 @@ def get_word_inds(text: str, word_place: int, tokenizer):
         word_place = [word_place]
     out = []
     if len(word_place) > 0:
-        words_encode = [tokenizer.decode([item]).strip("#") for item in tokenizer.encode(text)][1:-1]
+        words_encode = [tokenizer.decode([item]).strip("#") for item in tokenizer.encode(text)]
+        if '</s>' in words_encode:
+            filtered_words_encode = list(filter(lambda x: x != '' and x != '</s>', words_encode))
+        else:
+            filtered_words_encode = words_encode[1:-1]
         cur_len, ptr = 0, 0
 
-        for i in range(len(words_encode)):
-            cur_len += len(words_encode[i])
+        for i in range(len(filtered_words_encode)):
+            cur_len += len(filtered_words_encode[i])
             if ptr in word_place:
                 out.append(i + 1)
             if cur_len >= len(split_text[ptr]):

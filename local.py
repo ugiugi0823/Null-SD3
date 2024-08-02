@@ -34,7 +34,7 @@ device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cp
 
 LOW_RESOURCE = False
 NUM_DDIM_STEPS = 50
-GUIDANCE_SCALE = 5.0
+GUIDANCE_SCALE = 7.0
 MAX_NUM_WORDS = 77
 
 
