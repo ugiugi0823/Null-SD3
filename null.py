@@ -608,6 +608,12 @@ class NullInversion:
         
         for i in range(NUM_DDIM_STEPS):
             
+            LR = config.learning_rate * (1. - i / 28.)
+            # LR = config.learning_rate
+            
+            
+            print("🌊 LR ===", LR)
+            
             
             uncond_embeddings = uncond_embeddings.clone().detach().requires_grad_(True)
             uncond_embeddings_p = uncond_embeddings_p.clone().detach().requires_grad_(True)
@@ -615,12 +621,12 @@ class NullInversion:
             
             
             if config.optimizer == "sgd":
-                optimizer = torch.optim.SGD([uncond_embeddings, uncond_embeddings_p], lr=config.learning_rate)
+                optimizer = torch.optim.SGD([uncond_embeddings, uncond_embeddings_p], lr=LR)
             elif config.optimizer == "adam":
                 # optimizer = torch.optim.Adam([uncond_embeddings, uncond_embeddings_p], lr=config.learning_rate)
-                optimizer = torch.optim.AdamW([uncond_embeddings, uncond_embeddings_p], lr=config.learning_rate * (1. - i / 100.))
+                optimizer = torch.optim.AdamW([uncond_embeddings, uncond_embeddings_p], lr=LR)
             elif config.optimizer == "rmsprop":
-                optimizer = torch.optim.RMSprop([uncond_embeddings, uncond_embeddings_p], lr=config.learning_rate)
+                optimizer = torch.optim.RMSprop([uncond_embeddings, uncond_embeddings_p], lr=LR)
             
             
             latent_prev = latents[len(latents) - i - 2]
@@ -632,6 +638,11 @@ class NullInversion:
 
             
             
+            
+            best_loss = float('inf')
+            best_uncond_embeddings = None
+            best_uncond_embeddings_p = None
+
             for j in range(num_inner_steps):
                 noise_pred_uncond = self.get_noise_pred_single(latent_cur, t, uncond_embeddings, uncond_embeddings_p, add_time_ids1)
                 noise_pred = noise_pred_uncond + GUIDANCE_SCALE * (noise_pred_cond - noise_pred_uncond)
@@ -642,22 +653,28 @@ class NullInversion:
                 optimizer.zero_grad()
                 loss.backward()
                 if torch.isnan(uncond_embeddings.grad).any():
-                    
                     print("Nan!!")
-                    # bar.update()
                     break
                 optimizer.step()
                 
-                loss_item = loss.item()
                 bar.set_description(f"Step {i}, Iteration {j}/{num_inner_steps}, Loss: {loss_item:.4f}")
+                
+                # 현재 loss가 지금까지의 best loss보다 낮으면 업데이트
+                if loss_item < best_loss:
+                    best_loss = loss_item
+                    best_uncond_embeddings = uncond_embeddings.detach().clone()
+                    best_uncond_embeddings_p = uncond_embeddings_p.detach().clone()
                 
                 if loss_item < epsilon + i * 2e-5:
                     break
-                
-        
-            uncond_embeddings_list.append(uncond_embeddings[:1].detach())
-            uncond_embeddings_p_list.append(uncond_embeddings_p[:1].detach())
-            print(f"🌊 embeddings이 이렇게 저장됨 Step {i}, Iteration {j}/{num_inner_steps}, Loss: {loss_item:.4f}---")
+
+            # 내부 루프가 끝난 후, 가장 낮은 loss를 가진 embeddings를 저장
+            if best_uncond_embeddings is not None:
+                uncond_embeddings_list.append(best_uncond_embeddings[:1])
+                uncond_embeddings_p_list.append(best_uncond_embeddings_p[:1])
+                print(f"🌊 최저 loss에서의 embeddings 저장됨 Step {i}, Loss: {best_loss:.4f}")
+            else:
+                print(f"🌊 Step {i}에서 유효한 embeddings를 찾지 못했습니다.")
             
             with torch.no_grad():
                 context = torch.cat([uncond_embeddings, cond_embeddings])
@@ -670,7 +687,7 @@ class NullInversion:
         return uncond_embeddings_list, uncond_embeddings_p_list
 
 
-    def invert(self, image_path: str, prompt: str, num_inner_steps=28, early_stop_epsilon=1e-5, verbose=False, do_1024=False, config=None):
+    def invert(self, image_path: str, prompt: str, num_inner_steps=50, early_stop_epsilon=1e-5, verbose=False, do_1024=False, config=None):
         self.init_prompt(prompt)
         ptp_utils.register_attention_control(self.model, None)
         image_gt = load_img(image_path, do_1024)
