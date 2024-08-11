@@ -4,7 +4,7 @@ import torch, inspect, abc, shutil
 
 import numpy as np
 import torch.nn.functional as nnf
-
+import torch.nn as nn
 from torch.optim import AdamW
 from diffusers import DiffusionPipeline, StableDiffusionXLImg2ImgPipeline, AutoencoderKL, StableDiffusionPipeline, DDIMScheduler
 from typing import Optional, Union, Tuple, List, Callable, Dict
@@ -15,11 +15,11 @@ from torch.optim.adam import Adam
 from PIL import Image
 from compel import Compel, ReturnedEmbeddingsType
 
-
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 
 NUM_DDIM_STEPS = 28
-GUIDANCE_SCALE = 7.0
+GUIDANCE_SCALE = 5.0
 
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
@@ -127,6 +127,8 @@ class NullInversion:
 
     def prev_step(self, model_output: Union[torch.FloatTensor, np.ndarray], timestep: int, sample: Union[torch.FloatTensor, np.ndarray], step_index: int):
         # prev_sample = self.scheduler.step(model_output, timestep, sample, return_dict=False)[0]
+        
+        
         shift= 1.0        
         num_train_timesteps = self.scheduler.config.num_train_timesteps
         timesteps = np.linspace(1, num_train_timesteps, num_train_timesteps, dtype=np.float32)[::-1].copy()
@@ -205,6 +207,7 @@ class NullInversion:
         prev_sample = prev_sample.to(model_output.dtype)
         
         # self.scheduler._step_index += 1
+        
         
         return prev_sample
     
@@ -367,7 +370,7 @@ class NullInversion:
         guidance_scale = 1 if is_forward else GUIDANCE_SCALE
     
         
-        # latents_input = self.scheduler.scale_model_input(latents_input, t)
+        # latents_input = self.model.scheduler.scale_model_input(latents_input, t)
         
         
         
@@ -381,7 +384,7 @@ class NullInversion:
         
         
         noise_pred = self.model.transformer(
-            hidden_states=latents,
+            hidden_states=latents_input,
             timestep=t,
             encoder_hidden_states=context,
             pooled_projections=context_p,
@@ -625,6 +628,7 @@ class NullInversion:
             elif config.optimizer == "adam":
                 # optimizer = torch.optim.Adam([uncond_embeddings, uncond_embeddings_p], lr=config.learning_rate)
                 optimizer = torch.optim.AdamW([uncond_embeddings, uncond_embeddings_p], lr=LR)
+                scheduler = ReduceLROnPlateau(optimizer, 'min', patience=2, factor=0.5)
             elif config.optimizer == "rmsprop":
                 optimizer = torch.optim.RMSprop([uncond_embeddings, uncond_embeddings_p], lr=LR)
             
@@ -648,7 +652,12 @@ class NullInversion:
                 noise_pred = noise_pred_uncond + GUIDANCE_SCALE * (noise_pred_cond - noise_pred_uncond)
                 
                 latents_prev_rec = self.prev_step(noise_pred, t, latent_cur, j)
-                loss = nnf.mse_loss(latents_prev_rec, latent_prev)
+                # loss_fn = nn.HuberLoss()
+                loss_fn = nn.L1Loss()
+                
+                loss = loss_fn(latents_prev_rec, latent_prev)
+                # loss = nnf.mse_loss(latents_prev_rec, latent_prev)
+                
                 loss_item = loss.item()
                 optimizer.zero_grad()
                 loss.backward()
@@ -656,6 +665,7 @@ class NullInversion:
                     print("Nan!!")
                     break
                 optimizer.step()
+                scheduler.step(loss_item)
                 
                 bar.set_description(f"Step {i}, Iteration {j}/{num_inner_steps}, Loss: {loss_item:.4f}")
                 
