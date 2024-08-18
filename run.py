@@ -33,7 +33,8 @@ def main(args):
     image_path = args.image_path
 
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
-    DISN = StableDiffusion3Pipeline.from_pretrained("stabilityai/stable-diffusion-3-medium-diffusers", torch_dtype=torch.float32).to(device)
+    DISN = StableDiffusion3Pipeline.from_pretrained("stabilityai/stable-diffusion-3-medium-diffusers", scheduler = DDIMScheduler(beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear", clip_sample=False,
+                                  set_alpha_to_one=False), torch_dtype=torch.float32).to(device)
 
     null_inversion = NullInversion(DISN)
     (image_gt, image_enc), x_t, uncond_embeddings, uncond_embeddings_p = null_inversion.invert(image_path, prompt, num_inner_steps=28, early_stop_epsilon=1e-5, verbose=True, do_1024=args.bigger, config=args)

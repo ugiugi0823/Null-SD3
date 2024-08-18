@@ -549,14 +549,18 @@ class NullInversion:
         timesteps, num_inference_steps = retrieve_timesteps(self.model.scheduler, num_inference_steps, device, timesteps)
         
         
-
+        guidance_scale = 1
         for i in range(NUM_DDIM_STEPS):
             
             t = self.model.scheduler.timesteps[len(self.model.scheduler.timesteps) - i - 1].unsqueeze(0)
             
             
             noise_pred = self.get_noise_pred_single(latent, t, cond_embeddings, cond_embeddings_p, add_time_ids2)
-            # noise_pred_1, noise_pred_2 = noise_pred.chunk(2)
+            
+            
+
+            noise_pred_uncond, noise_prediction_text = noise_pred.chunk(2)
+            noise_pred = noise_pred_uncond + guidance_scale * (noise_prediction_text - noise_pred_uncond)
             
             latent = self.next_step(noise_pred, t, latent, i)
             all_latent.append(latent)
@@ -719,8 +723,6 @@ class NullInversion:
 
 
     def __init__(self, model):
-        scheduler = DDIMScheduler(beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear", clip_sample=False,
-                                  set_alpha_to_one=False)
         self.model = model
         self.tokenizer = self.model.tokenizer
         self.model.scheduler.set_timesteps(NUM_DDIM_STEPS)
