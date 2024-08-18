@@ -69,13 +69,12 @@ def save_individual_images(images,directory="./result"):
     
     # Saving images
     pil_img = Image.fromarray(images[2].astype(np.uint8))
+    pil_img2 = Image.fromarray(images[1].astype(np.uint8))
     
     seoul_tz = pytz.timezone("Asia/Seoul")
     current_time = datetime.datetime.now(seoul_tz).strftime("%Y-%m-%dT%H-%M-%S")
-
-    file_path = f"{directory}/result_{current_time}_new.png"
-    pil_img.save(file_path)
-    print(f"Image saved as {file_path}")  
+    
+    
     
     percept = lpips.LPIPS(net='vgg').cuda()
     transform = transforms.Compose([
@@ -117,7 +116,13 @@ def save_individual_images(images,directory="./result"):
     
     print(f"🔥 PSNR original vs new: {psnr_value:.2f}")
     print(f"🔥 SSIM original vs new: {ssim_value:.3f}")  
-    print(f"🔥 LPIPS original vs new: {lpips_value:.3f}") 
+    print(f"🔥 LPIPS original vs new: {lpips_value:.3f}")
+    
+    file_path = f"{directory}/result_{current_time}_{psnr_value}_new.png"
+    file_path_2 = f"{directory}/result_{current_time}_ori.png"
+    pil_img2.save(file_path_2)
+    pil_img.save(file_path)
+    print(f"Image saved as {file_path}")   
     
 
 def diff_individual(images):
@@ -348,7 +353,8 @@ def diffusion_step(model, controller, latents, context, context_p, step, t, guid
 
 def latent2image(vae, latents):
     
-    latents = 1 / 0.13025 * latents
+    latents = (1 / 1.5305 * latents) + 0.0609 
+    # latents = (1 / 1.5305 * latents.detach()) + 0.0609
     image = vae.decode(latents)['sample']
     image = (image / 2 + 0.5).clamp(0, 1)
     image = image.cpu().permute(0, 2, 3, 1).numpy()

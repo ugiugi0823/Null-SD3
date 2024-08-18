@@ -1,16 +1,13 @@
-import gc, abc, torch, shutil
+import abc, torch
 import ptp_utils
 import seq_aligner
 
-import torch.nn.functional as nnf
 import torch.nn.functional as F
 import numpy as np
 
-
-from diffusers import DiffusionPipeline, AutoencoderKL, DDIMScheduler
-from typing import Optional, Union, Tuple, List, Callable, Dict
+from typing import Optional, Union, Tuple, List, Dict
 from tqdm import tqdm
-from transformers import AutoTokenizer
+from transformers import T5TokenizerFast, T5Tokenizer, AutoTokenizer
 
 from PIL import Image, ImageEnhance
 from compel import Compel, ReturnedEmbeddingsType
@@ -22,8 +19,14 @@ from local import *
 # tokenizer_CLIP_G_14 = AutoTokenizer.from_pretrained("laion/CLIP-ViT-g-14-laion2B-s12B-b42K")
 # tokenizer_T5_XXL = AutoTokenizer.from_pretrained("google/t5-v1_1-xxl")
 
-tokenizer = AutoTokenizer.from_pretrained("google/t5-v1_1-xxl")
-# tokenizer = AutoTokenizer.from_pretrained("openai/clip-vit-base-patch32")
+
+
+# tokenizer = AutoTokenizer.from_pretrained("google/t5-v1_1-xxl", use_fast=False, add_prefix_space=True, legacy=False)
+tokenizer = T5TokenizerFast.from_pretrained("google/t5-v1_1-xxl", add_prefix_space=False, legacy=False)
+
+# tokenizer = T5Tokenizer.from_pretrained("google/t5-v1_1-xxl", add_prefix_space=True, legacy=False)
+# tokenizer = T5TokenizerFast.from_pretrained("google/t5-v1_1-xxl", add_prefix_space=True, legacy=False)
+
 
 
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
@@ -33,9 +36,9 @@ device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cp
 
 
 LOW_RESOURCE = False
-NUM_DDIM_STEPS = 50
-GUIDANCE_SCALE = 7.0
-MAX_NUM_WORDS = 77
+NUM_DDIM_STEPS = 28
+GUIDANCE_SCALE = 5.0
+MAX_NUM_WORDS = 256
 
 
 class LocalBlend:
@@ -333,7 +336,8 @@ def get_equalizer(text: str, word_select: Union[int, Tuple[int, ...]], values: U
                   Tuple[float, ...]]):
     if type(word_select) is int or type(word_select) is str:
         word_select = (word_select,)
-    equalizer = torch.ones(1, 77)
+    # equalizer = torch.ones(1, 77)
+    equalizer = torch.ones(1, 256)
 
     for word, val in zip(word_select, values):
         inds = ptp_utils.get_word_inds(text, word, tokenizer)
@@ -441,13 +445,13 @@ def text2image_ldm_stable(
     neg_prompt:  List[str],
     prompt:  List[str],
     controller,
-    num_inference_steps: int = 50,
-    guidance_scale: Optional[float] = 7.5,
+    num_inference_steps: int = 28,
+    guidance_scale: Optional[float] = 7.0,
     generator: Optional[torch.Generator] = None,
     latent: Optional[torch.FloatTensor] = None,
     uncond_embeddings=None,
     uncond_embeddings_p=None,
-    start_time=50,
+    start_time=28,
     return_type='image'
 ):
     batch_size = len(prompt)

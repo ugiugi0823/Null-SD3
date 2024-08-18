@@ -1,3 +1,5 @@
-CUDA_VISIBLE_DEVICES=2 python run.py \
---learning_rate 0.01 \
---optimizer "sgd"
+#!/bin/bash
+CUDA_VISIBLE_DEVICES=1 python run.py \
+--learning_rate 0.0001 \
+--optimizer "adam"
+

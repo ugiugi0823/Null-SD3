@@ -10,3 +10,4 @@ result/
 scripts/
 png/
 /wandb
+/result_backup/

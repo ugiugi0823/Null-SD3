@@ -1,10 +1,10 @@
 import ptp_utils, seq_aligner
-import torch, inspect, abc, shutil, wandb
+import torch, inspect, abc, shutil
 
 
 import numpy as np
 import torch.nn.functional as nnf
-
+import torch.nn as nn
 from torch.optim import AdamW
 from diffusers import DiffusionPipeline, StableDiffusionXLImg2ImgPipeline, AutoencoderKL, StableDiffusionPipeline, DDIMScheduler
 from typing import Optional, Union, Tuple, List, Callable, Dict
@@ -15,14 +15,12 @@ from torch.optim.adam import Adam
 from PIL import Image
 from compel import Compel, ReturnedEmbeddingsType
 
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 
+NUM_DDIM_STEPS = 28
+GUIDANCE_SCALE = 5.0
 
-
-LOW_RESOURCE = False
-NUM_DDIM_STEPS = 50
-GUIDANCE_SCALE = 7.0
-MAX_NUM_WORDS = 77
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
 
@@ -129,6 +127,8 @@ class NullInversion:
 
     def prev_step(self, model_output: Union[torch.FloatTensor, np.ndarray], timestep: int, sample: Union[torch.FloatTensor, np.ndarray], step_index: int):
         # prev_sample = self.scheduler.step(model_output, timestep, sample, return_dict=False)[0]
+        
+        
         shift= 1.0        
         num_train_timesteps = self.scheduler.config.num_train_timesteps
         timesteps = np.linspace(1, num_train_timesteps, num_train_timesteps, dtype=np.float32)[::-1].copy()
@@ -207,6 +207,7 @@ class NullInversion:
         prev_sample = prev_sample.to(model_output.dtype)
         
         # self.scheduler._step_index += 1
+        
         
         return prev_sample
     
@@ -330,30 +331,6 @@ class NullInversion:
         
         
         
-        # print("🤪"*40)
-        # print("latent_model_input",latents.size())
-        # print("timestep", t.size())
-
-
-        # print("prompt_embeds",context.size())
-        # print("pooled_prompt_embeds", context_p.size())
-        
-        # print("🤪"*40)
-        
-        
-        
-        
-        
-        
-        # [o]norm_hidden_states torch.Size([2, 4096, 1536])
-        # [o]norm_encoder_hidden_states torch.Size([2, 154, 1536])
-        # norm_hidden_states torch.Size([1, 1024, 1536])
-        # norm_encoder_hidden_states torch.Size([1, 154, 1536])
-        # ---
-        # [o]hidden_states torch.Size([2, 4096, 1536])
-        # [o]encoder_hidden_states torch.Size([2, 154, 1536])
-        # hidden_states torch.Size([1, 1024, 1536])
-        # encoder_hidden_states torch.Size([1, 154, 1536])
         
         
         
@@ -374,13 +351,6 @@ class NullInversion:
                 latents = latents.to(latents_dtype)
 
         
-        # noise_pred = self.model.transformer(
-        #                             hidden_states=latents, 
-                                     
-        #                             encoder_hidden_states=context,
-        #                             timestep=t,
-                                     
-        #                              )[0]
         return noise_pred
     
 
@@ -400,7 +370,7 @@ class NullInversion:
         guidance_scale = 1 if is_forward else GUIDANCE_SCALE
     
         
-        # latents_input = self.scheduler.scale_model_input(latents_input, t)
+        # latents_input = self.model.scheduler.scale_model_input(latents_input, t)
         
         
         
@@ -414,7 +384,7 @@ class NullInversion:
         
         
         noise_pred = self.model.transformer(
-            hidden_states=latents,
+            hidden_states=latents_input,
             timestep=t,
             encoder_hidden_states=context,
             pooled_projections=context_p,
@@ -439,7 +409,7 @@ class NullInversion:
 # 여기는 손을 봤음 
     @torch.no_grad()
     def latent2image(self, latents, return_type='np'):
-        latents = 1 / 1.5305 * latents.detach()
+        latents = (1 / 1.5305 * latents.detach()) + 0.0609
         # latents = latents.to(torch.float32)
         
         image = self.model.vae.decode(latents)['sample']
@@ -532,18 +502,6 @@ class NullInversion:
         )
         
         
-        
-        
-        
-        # compel = Compel(
-        # tokenizer=[self.model.tokenizer, self.model.tokenizer_2] ,
-        # text_encoder=[self.model.text_encoder, self.model.text_encoder_2],
-        # returned_embeddings_type=ReturnedEmbeddingsType.PENULTIMATE_HIDDEN_STATES_NON_NORMALIZED,
-        # requires_pooled=[False, True]
-        # )
-        
-        # prompt_embeds, pooled_prompt_embeds = compel(prompt)
-        # negative_prompt_embeds, negative_pooled_prompt_embeds = compel("") 
    
         self.model.vae_scale_factor = 2 ** (len(self.model.vae.config.block_out_channels) - 1)
         self.model.default_sample_size = self.model.transformer.config.sample_size
@@ -560,17 +518,6 @@ class NullInversion:
         crops_coords_top_left = (0, 0)    
         add_time_ids = list(original_size + crops_coords_top_left + target_size)
         
-        # passed_add_embed_dim = (
-        #     self.model.transformer.config.addition_time_embed_dim * len(add_time_ids) + self.model.text_encoder_2.config.projection_dim
-        # )
-        # expected_add_embed_dim = self.model.transformer.add_embedding.linear_1.in_features
-
-        
-
-        # if expected_add_embed_dim != passed_add_embed_dim:
-        #     raise ValueError(
-        #         f"Model expects an added time embedding vector of length {expected_add_embed_dim}, but a vector of {passed_add_embed_dim} was created. The model has an incorrect config. Please check `unet.config.time_embedding_type` and `text_encoder_2.config.projection_dim`."
-        #     )
 
         add_time_ids = torch.tensor([add_time_ids], dtype=self.model.transformer.dtype).to(self.model.device)
         batch_size = prompt_embeds.shape[0]
@@ -592,14 +539,6 @@ class NullInversion:
         uncond_embeddings_p, cond_embeddings_p = self.context_p.chunk(2)
         uncond_embeddings, cond_embeddings = self.context.chunk(2)
         add_time_ids1, add_time_ids2 = self.add_time_ids.chunk(2)
-        
-        
-        # cond_embeddings_p = self.context_p
-        # cond_embeddings = self.context
-        # add_time_ids2 = self.add_time_ids
-        
-        
-        
         
         
         all_latent = [latent]
@@ -672,57 +611,80 @@ class NullInversion:
         
         for i in range(NUM_DDIM_STEPS):
             
+            LR = config.learning_rate * (1. - i / 28.)
+            # LR = config.learning_rate
+            
+            
+            print("🌊 LR ===", LR)
+            
             
             uncond_embeddings = uncond_embeddings.clone().detach().requires_grad_(True)
             uncond_embeddings_p = uncond_embeddings_p.clone().detach().requires_grad_(True)
             add_time_ids1 = add_time_ids1.clone().detach().requires_grad_(True)
             
-            # optimizer = Adam([uncond_embeddings, uncond_embeddings_p], lr=1e-8 * (1. - i / 100.))
-            # optimizer = Adam([uncond_embeddings, uncond_embeddings_p], lr=1e-8)
-                        # 최적화 알고리즘 선택
+            
             if config.optimizer == "sgd":
-                optimizer = torch.optim.SGD([uncond_embeddings, uncond_embeddings_p], lr=config.learning_rate)
+                optimizer = torch.optim.SGD([uncond_embeddings, uncond_embeddings_p], lr=LR)
             elif config.optimizer == "adam":
-                optimizer = torch.optim.Adam([uncond_embeddings, uncond_embeddings_p], lr=config.learning_rate)
+                # optimizer = torch.optim.Adam([uncond_embeddings, uncond_embeddings_p], lr=config.learning_rate)
+                optimizer = torch.optim.AdamW([uncond_embeddings, uncond_embeddings_p], lr=LR)
+                scheduler = ReduceLROnPlateau(optimizer, 'min', patience=2, factor=0.5)
             elif config.optimizer == "rmsprop":
-                optimizer = torch.optim.RMSprop([uncond_embeddings, uncond_embeddings_p], lr=config.learning_rate)
+                optimizer = torch.optim.RMSprop([uncond_embeddings, uncond_embeddings_p], lr=LR)
             
             
             latent_prev = latents[len(latents) - i - 2]
             t = self.model.scheduler.timesteps[i]
-            # print("🩵🩵 timestep =", t)
-            # print("🩵🩵 timestep =", t.size())
+            
             
             with torch.no_grad():
                 noise_pred_cond = self.get_noise_pred_single(latent_cur, t, cond_embeddings, cond_embeddings_p, add_time_ids2)
 
             
             
+            
+            best_loss = float('inf')
+            best_uncond_embeddings = None
+            best_uncond_embeddings_p = None
+
             for j in range(num_inner_steps):
                 noise_pred_uncond = self.get_noise_pred_single(latent_cur, t, uncond_embeddings, uncond_embeddings_p, add_time_ids1)
                 noise_pred = noise_pred_uncond + GUIDANCE_SCALE * (noise_pred_cond - noise_pred_uncond)
                 
                 latents_prev_rec = self.prev_step(noise_pred, t, latent_cur, j)
-                loss = nnf.mse_loss(latents_prev_rec, latent_prev)
+                # loss_fn = nn.HuberLoss()
+                loss_fn = nn.L1Loss()
+                
+                loss = loss_fn(latents_prev_rec, latent_prev)
+                # loss = nnf.mse_loss(latents_prev_rec, latent_prev)
+                
                 loss_item = loss.item()
                 optimizer.zero_grad()
                 loss.backward()
                 if torch.isnan(uncond_embeddings.grad).any():
-                    
                     print("Nan!!")
-                    # bar.update()
                     break
                 optimizer.step()
-                wandb.log({"loss": loss_item})
-                loss_item = loss.item()
+                scheduler.step(loss_item)
+                
                 bar.set_description(f"Step {i}, Iteration {j}/{num_inner_steps}, Loss: {loss_item:.4f}")
+                
+                # 현재 loss가 지금까지의 best loss보다 낮으면 업데이트
+                if loss_item < best_loss:
+                    best_loss = loss_item
+                    best_uncond_embeddings = uncond_embeddings.detach().clone()
+                    best_uncond_embeddings_p = uncond_embeddings_p.detach().clone()
                 
                 if loss_item < epsilon + i * 2e-5:
                     break
-                
-        
-            uncond_embeddings_list.append(uncond_embeddings[:1].detach())
-            uncond_embeddings_p_list.append(uncond_embeddings_p[:1].detach())
+
+            # 내부 루프가 끝난 후, 가장 낮은 loss를 가진 embeddings를 저장
+            if best_uncond_embeddings is not None:
+                uncond_embeddings_list.append(best_uncond_embeddings[:1])
+                uncond_embeddings_p_list.append(best_uncond_embeddings_p[:1])
+                print(f"🌊 최저 loss에서의 embeddings 저장됨 Step {i}, Loss: {best_loss:.4f}")
+            else:
+                print(f"🌊 Step {i}에서 유효한 embeddings를 찾지 못했습니다.")
             
             with torch.no_grad():
                 context = torch.cat([uncond_embeddings, cond_embeddings])
