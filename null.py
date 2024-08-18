@@ -614,9 +614,9 @@ class NullInversion:
         
         
         for i in range(NUM_DDIM_STEPS):
-            
-            LR = config.learning_rate * (1. - i / 28.)
-            # LR = config.learning_rate
+            # LR = config.learning_rate * (1. + i / 28.) #JH - 수정함.
+            # LR = config.learning_rate * (1. - i / 28.)
+            LR = config.learning_rate
             
             
             print("🌊 LR ===", LR)
@@ -696,7 +696,7 @@ class NullInversion:
                 add_time_ids = torch.cat([add_time_ids1, add_time_ids2]) 
                 latent_cur = self.get_noise_pred(latent_cur, t, False, context, context_p=context_p, step=i)
             bar.update()
-            
+        bar.close()   
         
         return uncond_embeddings_list, uncond_embeddings_p_list
 
