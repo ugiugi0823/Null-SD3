@@ -16,9 +16,10 @@ from PIL import Image
 from compel import Compel, ReturnedEmbeddingsType
 
 from torch.optim.lr_scheduler import ReduceLROnPlateau
+import wandb
 
 
-NUM_DDIM_STEPS = 28
+NUM_DDIM_STEPS = 25
 GUIDANCE_SCALE = 5.0
 
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
@@ -104,16 +105,17 @@ def load_img(image_path, do_1024=False):
     
     
     image = load_image(image_path)
-    do_1024=False
+
     if do_1024:
         if image.size[0] != 1024:
             image = image.resize((1024, 1024)) 
         
             
     else:
+        print(image.size[0])
         if image.size[0] != 512:
-            image = image.resize((512, 512)) 
-            
+            image = image.resize((256, 256)) 
+            print("512 적용됨.")
         
 
     print("🌊 image resize = ",image.size[0])
@@ -316,10 +318,8 @@ class NullInversion:
  
         return next_sample
 
-    def get_noise_pred_single(self, latents, t, context, context_p, add_time_ids):        
+    def get_noise_pred_single(self, latents, t, context, context_p, add_time_ids): #conditional, unconditional 중 한가지만 적용해서 noise를 예측함.    
         added_cond_kwargs = {"text_embeds": context_p, "time_ids": add_time_ids}
-        
-        # latents = torch.cat([latents] * 2)
         
         
         t = t.expand(latents.shape[0])
@@ -409,7 +409,7 @@ class NullInversion:
 # 여기는 손을 봤음 
     @torch.no_grad()
     def latent2image(self, latents, return_type='np'):
-        latents = (1 / 1.5305 * latents.detach()) + 0.0609
+        latents = (1 / self.model.vae.config.scaling_factor * latents.detach()) + self.model.vae.config.shift_factor #JH - 수정함.
         # latents = latents.to(torch.float32)
         
         image = self.model.vae.decode(latents)['sample']
@@ -549,18 +549,14 @@ class NullInversion:
         timesteps, num_inference_steps = retrieve_timesteps(self.model.scheduler, num_inference_steps, device, timesteps)
         
         
-        guidance_scale = 1
         for i in range(NUM_DDIM_STEPS):
             
-            t = self.model.scheduler.timesteps[len(self.model.scheduler.timesteps) - i - 1].unsqueeze(0)
+            t = self.model.scheduler.timesteps[i].unsqueeze(0)
             
-            
+            #w=1인 경우는, conditional context만 적용한 것과 같으므로 get_noise_pred_single에 cond_embeddings를 넣어주면 된다.
             noise_pred = self.get_noise_pred_single(latent, t, cond_embeddings, cond_embeddings_p, add_time_ids2)
-            
-            
 
-            noise_pred_uncond, noise_prediction_text = noise_pred.chunk(2)
-            noise_pred = noise_pred_uncond + guidance_scale * (noise_prediction_text - noise_pred_uncond)
+            # noise_pred_1, noise_pred_2 = noise_pred.chunk(2)
             
             latent = self.next_step(noise_pred, t, latent, i)
             all_latent.append(latent)
@@ -672,6 +668,7 @@ class NullInversion:
                 scheduler.step(loss_item)
                 
                 bar.set_description(f"Step {i}, Iteration {j}/{num_inner_steps}, Loss: {loss_item:.4f}")
+                wandb.log({"Training loss": loss_item})
                 
                 # 현재 loss가 지금까지의 best loss보다 낮으면 업데이트
                 if loss_item < best_loss:

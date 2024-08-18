@@ -41,7 +41,7 @@ if __name__ == '__main__':
     p.add_argument("--image_path", type=str, default="./img/[0001]TopBF0.png", help="Image Path")
     p.add_argument("--prompt", type=str, default="photo of a crack defect image", help="Positive Prompt")
     p.add_argument("--neg_prompt", type=str, default="", help="Negative Prompt")
-    p.add_argument("--bigger", action='store_true', help="If you want to create an image 1024")
+    p.add_argument("--bigger", default=False, help="If you want to create an image 1024")
     p.add_argument("--learning_rate", type=float, required=True, help="Learning rate for the optimizer")
     p.add_argument("--optimizer", type=str, required=True, help="Optimizer to use (sgd, adam, rmsprop 등)")
 

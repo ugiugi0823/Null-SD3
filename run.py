@@ -33,9 +33,9 @@ def main(args):
     image_path = args.image_path
 
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
-    DISN = StableDiffusion3Pipeline.from_pretrained("stabilityai/stable-diffusion-3-medium-diffusers", scheduler = DDIMScheduler(beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear", clip_sample=False,
-                                  set_alpha_to_one=False), torch_dtype=torch.float32).to(device)
-
+    DISN = StableDiffusion3Pipeline.from_pretrained("stabilityai/stable-diffusion-3-medium-diffusers", torch_dtype=torch.float32).to(device)
+    # scheduler = DDIMScheduler(beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear", clip_sample=False,
+    #                               set_alpha_to_one=False),
     null_inversion = NullInversion(DISN)
     (image_gt, image_enc), x_t, uncond_embeddings, uncond_embeddings_p = null_inversion.invert(image_path, prompt, num_inner_steps=28, early_stop_epsilon=1e-5, verbose=True, do_1024=args.bigger, config=args)
     
@@ -69,7 +69,7 @@ if __name__ == '__main__':
     p.add_argument("--image_path", type=str, default="./img/[0001]TopBF0.png", help="Image Path")
     p.add_argument("--prompt", type=str, default="photo of a crack defect image", help="Positive Prompt")
     p.add_argument("--neg_prompt", type=str, default="", help="Negative Prompt")
-    p.add_argument("--bigger", action='store_true', help="If you want to create an image 1024")
+    p.add_argument("--bigger", default=False, help="If you want to create an image 1024")
     p.add_argument("--learning_rate", type=float, required=True, help="Learning rate for the optimizer")
     p.add_argument("--optimizer", type=str, required=True, help="Optimizer to use (sgd, adam, rmsprop 등)")
 
