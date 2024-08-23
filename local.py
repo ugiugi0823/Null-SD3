@@ -541,9 +541,9 @@ def text2image_ldm_stable(
 def run_and_display(model,neg_prompts,prompts, controller, latent=None, run_baseline=False, generator=None, uncond_embeddings=None,uncond_embeddings_p=None,add_time_ids1=None ,verbose=True, steps=50):
     if run_baseline:
         print("w.o. prompt-to-prompt")
-        images, latent = run_and_display(prompts, EmptyControl(), latent=latent, run_baseline=False, generator=generator)
+        images, latent = run_and_display(prompts, EmptyControl(), latent=latent, run_baseline=False, generator=generator, steps=steps)
         print("with prompt-to-prompt")
-    images, x_t = text2image_ldm_stable(model, neg_prompts,prompts, controller, latent=latent, num_inference_steps=steps, guidance_scale=GUIDANCE_SCALE, generator=generator, uncond_embeddings=uncond_embeddings, uncond_embeddings_p=uncond_embeddings_p)
+    images, x_t = text2image_ldm_stable(model, neg_prompts,prompts, controller, latent=latent, num_inference_steps=steps, guidance_scale=GUIDANCE_SCALE, generator=generator, uncond_embeddings=uncond_embeddings, uncond_embeddings_p=uncond_embeddings_p, start_time=steps)
     if verbose:
         ptp_utils.view_images(images)
     return images, x_t

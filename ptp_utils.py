@@ -166,87 +166,87 @@ def diff_individual(images):
 
 
 def prev_step_local(self, model_output: Union[torch.FloatTensor, np.ndarray], timestep: int, sample: Union[torch.FloatTensor, np.ndarray], step_index: int):
-    # prev_sample = self.scheduler.step(model_output, timestep, sample, return_dict=False)[0]
-    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+    prev_sample = self.scheduler.step(model_output, timestep, sample, return_dict=False)[0]
+    # device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
     
-    shift= 1.0        
-    num_train_timesteps = self.scheduler.config.num_train_timesteps
-    timesteps = np.linspace(1, num_train_timesteps, num_train_timesteps, dtype=np.float32)[::-1].copy()
-    timesteps = torch.from_numpy(timesteps).to(dtype=torch.float32)
+    # shift= 1.0        
+    # num_train_timesteps = self.scheduler.config.num_train_timesteps
+    # timesteps = np.linspace(1, num_train_timesteps, num_train_timesteps, dtype=np.float32)[::-1].copy()
+    # timesteps = torch.from_numpy(timesteps).to(dtype=torch.float32)
 
-    sigmas = timesteps / num_train_timesteps
-    sigmas = shift * sigmas / (1 + (shift - 1) * sigmas)
+    # sigmas = timesteps / num_train_timesteps
+    # sigmas = shift * sigmas / (1 + (shift - 1) * sigmas)
 
-    self.timesteps = sigmas * num_train_timesteps
+    # self.timesteps = sigmas * num_train_timesteps
 
-    # self._step_index = None
-    # self._begin_index = None
+    # # self._step_index = None
+    # # self._begin_index = None
 
-    self.sigmas = sigmas.to("cpu")  # to avoid too much CPU/GPU communication
-    self.sigma_min = self.sigmas[-1].item()
-    self.sigma_max = self.sigmas[0].item()
+    # self.sigmas = sigmas.to("cpu")  # to avoid too much CPU/GPU communication
+    # self.sigma_min = self.sigmas[-1].item()
+    # self.sigma_max = self.sigmas[0].item()
     
     
-    s_churn = 0.0
-    s_tmin = 0.0
-    s_tmax= float("inf")
-    s_noise = 1.0
+    # s_churn = 0.0
+    # s_tmin = 0.0
+    # s_tmax= float("inf")
+    # s_noise = 1.0
     
-    num_inference_steps = 50
+    # num_inference_steps = 50
     
-    timesteps = np.linspace(
-        self.scheduler._sigma_to_t(self.sigma_max), self.scheduler._sigma_to_t(self.sigma_min), num_inference_steps
-    )
+    # timesteps = np.linspace(
+    #     _sigma_to_t(self, self.sigma_max), _sigma_to_t(self, self.sigma_min), num_inference_steps
+    # )
 
-    sigmas = timesteps / self.scheduler.config.num_train_timesteps
-    sigmas = self.scheduler.config.shift * sigmas / (1 + (self.scheduler.config.shift - 1) * sigmas)
-    sigmas = torch.from_numpy(sigmas).to(dtype=torch.float32, device=device)
+    # sigmas = timesteps / self.scheduler.config.num_train_timesteps
+    # sigmas = self.scheduler.config.shift * sigmas / (1 + (self.scheduler.config.shift - 1) * sigmas)
+    # sigmas = torch.from_numpy(sigmas).to(dtype=torch.float32, device=device)
 
-    timesteps = sigmas * self.scheduler.config.num_train_timesteps
-    self.timesteps = timesteps.to(device=device)
-    self.sigmas = torch.cat([sigmas, torch.zeros(1, device=sigmas.device)])
+    # timesteps = sigmas * self.scheduler.config.num_train_timesteps
+    # self.timesteps = timesteps.to(device=device)
+    # self.sigmas = torch.cat([sigmas, torch.zeros(1, device=sigmas.device)])
 
-    # Upcast to avoid precision issues when computing prev_sample
-    sample = sample.to(torch.float32)
-    
-    
-    
-    # print("⭐️self.step_index", step_index)
+    # # Upcast to avoid precision issues when computing prev_sample
+    # sample = sample.to(torch.float32)
     
     
     
-    sigma = self.sigmas[step_index]
-
-    gamma = min(s_churn / (len(self.sigmas) - 1), 2**0.5 - 1) if s_tmin <= sigma <= s_tmax else 0.0
+    # # print("⭐️self.step_index", step_index)
     
-    generator = torch.Generator("cuda").manual_seed(33)
-    noise = randn_tensor(
-        model_output.shape, dtype=model_output.dtype, device=model_output.device, generator=generator
-    )
-
-    eps = noise * s_noise
-    sigma_hat = sigma * (gamma + 1)
-
-    if gamma > 0:
-        sample = sample + eps * (sigma_hat**2 - sigma**2) ** 0.5
-
-    # 1. compute predicted original sample (x_0) from sigma-scaled predicted noise
-    # NOTE: "original_sample" should not be an expected prediction_type but is left in for
-    # backwards compatibility
-
-    # if self.config.prediction_type == "vector_field":
-
-    denoised = sample - model_output * sigma
-    # 2. Convert to an ODE derivative
-    derivative = (sample - denoised) / sigma_hat
-
-    dt = self.sigmas[step_index + 1] - sigma_hat
-
-    prev_sample = sample + derivative * dt
-    # Cast sample back to model compatible dtype
-    prev_sample = prev_sample.to(model_output.dtype)
     
-    # self.scheduler._step_index += 1
+    
+    # sigma = self.sigmas[step_index]
+
+    # gamma = min(s_churn / (len(self.sigmas) - 1), 2**0.5 - 1) if s_tmin <= sigma <= s_tmax else 0.0
+    
+    # generator = torch.Generator("cuda").manual_seed(33)
+    # noise = randn_tensor(
+    #     model_output.shape, dtype=model_output.dtype, device=model_output.device, generator=generator
+    # )
+
+    # eps = noise * s_noise
+    # sigma_hat = sigma * (gamma + 1)
+
+    # if gamma > 0:
+    #     sample = sample + eps * (sigma_hat**2 - sigma**2) ** 0.5
+
+    # # 1. compute predicted original sample (x_0) from sigma-scaled predicted noise
+    # # NOTE: "original_sample" should not be an expected prediction_type but is left in for
+    # # backwards compatibility
+
+    # # if self.config.prediction_type == "vector_field":
+
+    # denoised = sample - model_output * sigma
+    # # 2. Convert to an ODE derivative
+    # derivative = (sample - denoised) / sigma_hat
+
+    # dt = self.sigmas[step_index + 1] - sigma_hat
+
+    # prev_sample = sample + derivative * dt
+    # # Cast sample back to model compatible dtype
+    # prev_sample = prev_sample.to(model_output.dtype)
+    
+    # # self.scheduler._step_index += 1
     
     return prev_sample
 
@@ -312,7 +312,7 @@ def diffusion_step(model, controller, latents, context, context_p, step, t, guid
         
         
         
-        
+        int_t = t
         t = t.expand(latents_input.shape[0])
         t=t.to(torch.float32).to(model.device)
         latents_input=latents_input.to(torch.float32)
@@ -345,7 +345,7 @@ def diffusion_step(model, controller, latents, context, context_p, step, t, guid
     latents = latents.to(noise_pred.device)
     
     
-    latents = prev_step_local(model, noise_pred, t, latents, step)
+    latents = prev_step_local(model, noise_pred, int_t, latents, step)
     # latents = model.scheduler.step(noise_pred, t, latents)[0]
     latents = controller.step_callback(latents)
     return latents
@@ -353,7 +353,7 @@ def diffusion_step(model, controller, latents, context, context_p, step, t, guid
 
 def latent2image(vae, latents):
     
-    latents = (1 / 1.5305 * latents) + 0.0609 
+    latents = (1 / vae.config.scaling_factor * latents.detach()) + vae.config.shift_factor
     # latents = (1 / 1.5305 * latents.detach()) + 0.0609
     image = vae.decode(latents)['sample']
     image = (image / 2 + 0.5).clamp(0, 1)

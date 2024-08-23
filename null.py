@@ -19,9 +19,6 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 import wandb
 
 
-NUM_DDIM_STEPS = 25
-GUIDANCE_SCALE = 5.0
-
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
 
@@ -128,87 +125,89 @@ def load_img(image_path, do_1024=False):
 class NullInversion:
 
     def prev_step(self, model_output: Union[torch.FloatTensor, np.ndarray], timestep: int, sample: Union[torch.FloatTensor, np.ndarray], step_index: int):
-        # prev_sample = self.scheduler.step(model_output, timestep, sample, return_dict=False)[0]
+        print(timestep)
+        prev_sample = self.scheduler.step(model_output, timestep, sample, return_dict=False)[0]
         
         
-        shift= 1.0        
-        num_train_timesteps = self.scheduler.config.num_train_timesteps
-        timesteps = np.linspace(1, num_train_timesteps, num_train_timesteps, dtype=np.float32)[::-1].copy()
-        timesteps = torch.from_numpy(timesteps).to(dtype=torch.float32)
+        # shift= 1.0        
+        
+        # num_train_timesteps = self.scheduler.config.num_train_timesteps
+        # timesteps = np.linspace(1, num_train_timesteps, num_train_timesteps, dtype=np.float32)[::-1].copy()
+        # timesteps = torch.from_numpy(timesteps).to(dtype=torch.float32)
 
-        sigmas = timesteps / num_train_timesteps
-        sigmas = shift * sigmas / (1 + (shift - 1) * sigmas)
+        # sigmas = timesteps / num_train_timesteps
+        # sigmas = shift * sigmas / (1 + (shift - 1) * sigmas)
 
-        self.timesteps = sigmas * num_train_timesteps
+        # self.timesteps = sigmas * num_train_timesteps
 
-        # self._step_index = None
-        # self._begin_index = None
+        # # self._step_index = None
+        # # self._begin_index = None
 
-        self.sigmas = sigmas.to("cpu")  # to avoid too much CPU/GPU communication
-        self.sigma_min = self.sigmas[-1].item()
-        self.sigma_max = self.sigmas[0].item()
+        # self.sigmas = sigmas.to("cpu")  # to avoid too much CPU/GPU communication
+        # self.sigma_min = self.sigmas[-1].item()
+        # self.sigma_max = self.sigmas[0].item()
         
         
-        s_churn = 0.0
-        s_tmin = 0.0
-        s_tmax= float("inf")
-        s_noise = 1.0
+        # s_churn = 0.0
+        # s_tmin = 0.0
+        # s_tmax= float("inf")
+        # s_noise = 1.0
         
-        num_inference_steps = NUM_DDIM_STEPS
+        # num_inference_steps = self.ddim_steps
         
-        timesteps = np.linspace(
-            self._sigma_to_t(self.sigma_max), self._sigma_to_t(self.sigma_min), num_inference_steps
-        )
+        # timesteps = np.linspace(
+        #     self._sigma_to_t(self.sigma_max), self._sigma_to_t(self.sigma_min), num_inference_steps
+        # )
 
-        sigmas = timesteps / self.scheduler.config.num_train_timesteps
-        sigmas = self.scheduler.config.shift * sigmas / (1 + (self.scheduler.config.shift - 1) * sigmas)
-        sigmas = torch.from_numpy(sigmas).to(dtype=torch.float32, device=device)
+        # sigmas = timesteps / self.scheduler.config.num_train_timesteps
+        # sigmas = self.scheduler.config.shift * sigmas / (1 + (self.scheduler.config.shift - 1) * sigmas)
+        # sigmas = torch.from_numpy(sigmas).to(dtype=torch.float32, device=device)
 
-        timesteps = sigmas * self.scheduler.config.num_train_timesteps
-        self.timesteps = timesteps.to(device=device)
-        self.sigmas = torch.cat([sigmas, torch.zeros(1, device=sigmas.device)])
+        # timesteps = sigmas * self.scheduler.config.num_train_timesteps
+        # self.timesteps = timesteps.to(device=device)
+        # self.sigmas = torch.cat([sigmas, torch.zeros(1, device=sigmas.device)])
 
-        # Upcast to avoid precision issues when computing prev_sample
-        sample = sample.to(torch.float32)
-        
-        
-        
-        # print("⭐️self.step_index", step_index)
+        # # Upcast to avoid precision issues when computing prev_sample
+        # sample = sample.to(torch.float32)
         
         
         
-        sigma = self.sigmas[step_index]
-
-        gamma = min(s_churn / (len(self.sigmas) - 1), 2**0.5 - 1) if s_tmin <= sigma <= s_tmax else 0.0
+        # # print("⭐️self.step_index", step_index)
         
-        generator = torch.Generator("cuda").manual_seed(33)
-        noise = randn_tensor(
-            model_output.shape, dtype=model_output.dtype, device=model_output.device, generator=generator
-        )
-
-        eps = noise * s_noise
-        sigma_hat = sigma * (gamma + 1)
-
-        if gamma > 0:
-            sample = sample + eps * (sigma_hat**2 - sigma**2) ** 0.5
-
-        # 1. compute predicted original sample (x_0) from sigma-scaled predicted noise
-        # NOTE: "original_sample" should not be an expected prediction_type but is left in for
-        # backwards compatibility
-
-        # if self.config.prediction_type == "vector_field":
-
-        denoised = sample - model_output * sigma
-        # 2. Convert to an ODE derivative
-        derivative = (sample - denoised) / sigma_hat
-
-        dt = self.sigmas[step_index + 1] - sigma_hat
-
-        prev_sample = sample + derivative * dt
-        # Cast sample back to model compatible dtype
-        prev_sample = prev_sample.to(model_output.dtype)
         
-        # self.scheduler._step_index += 1
+        
+        # sigma = self.sigmas[step_index]
+
+        # gamma = min(s_churn / (len(self.sigmas) - 1), 2**0.5 - 1) if s_tmin <= sigma <= s_tmax else 0.0
+        
+        # generator = torch.Generator("cuda").manual_seed(33)
+        # noise = randn_tensor(
+        #     model_output.shape, dtype=model_output.dtype, device=model_output.device, generator=generator
+        # )
+
+        # eps = noise * s_noise
+        # sigma_hat = sigma * (gamma + 1)
+
+        # if gamma > 0:
+        #     sample = sample + eps * (sigma_hat**2 - sigma**2) ** 0.5
+
+        # # 1. compute predicted original sample (x_0) from sigma-scaled predicted noise
+        # # NOTE: "original_sample" should not be an expected prediction_type but is left in for
+        # # backwards compatibility
+
+        # # if self.config.prediction_type == "vector_field":
+
+        # denoised = sample - model_output * sigma
+        # # 2. Convert to an ODE derivative
+        # derivative = (sample - denoised) / sigma_hat
+
+        # dt = self.sigmas[step_index + 1] - sigma_hat
+
+        # prev_sample = sample + derivative * dt
+        # # Cast sample back to model compatible dtype
+        # prev_sample = prev_sample.to(model_output.dtype)
+        
+        # # self.scheduler._step_index += 1
         
         
         return prev_sample
@@ -233,88 +232,100 @@ class NullInversion:
             self._step_index = self._begin_index
     
     def next_step(self, model_output: Union[torch.FloatTensor, np.ndarray], timestep: int, sample: Union[torch.FloatTensor, np.ndarray], step_index: int):
+        time_term = self.scheduler.config.num_train_timesteps // self.scheduler.num_inference_steps
+        timestep, next_timestep = min(timestep, 999), min(timestep + time_term, 999)
+
+        self.scheduler.alphas_cumprod = self.scheduler.alphas_cumprod.to("cuda")
+        print(self.scheduler.alphas_cumprod.device)
+        alpha_prod_t = self.scheduler.alphas_cumprod[timestep].to("cuda") if timestep >= 0 else self.scheduler.final_alpha_cumprod.to("cuda")
+        alpha_prod_t_next = self.scheduler.alphas_cumprod[next_timestep].to("cuda")
+        beta_prod_t = 1 - alpha_prod_t        
+
         
-        # time_term = self.scheduler.config.num_train_timesteps // self.scheduler.num_inference_steps 
-        # timestep, next_timestep = min(timestep, 999), min(timestep + time_term, 999)
-        shift= 1.0
-        num_train_timesteps = self.scheduler.config.num_train_timesteps
-        timesteps = np.linspace(1, num_train_timesteps, num_train_timesteps, dtype=np.float32)[::-1].copy()
-        timesteps = torch.from_numpy(timesteps).to(dtype=torch.float32)
+        next_original_sample = (sample - beta_prod_t ** 0.5 * model_output) / alpha_prod_t ** 0.5        
+        next_sample_direction = (1 - alpha_prod_t_next) ** (0.5) * model_output
+        next_sample = alpha_prod_t_next ** (0.5) * next_original_sample + next_sample_direction
+        # # time_term = self.scheduler.config.num_train_timesteps // self.scheduler.num_inference_steps 
+        # # timestep, next_timestep = min(timestep, 999), min(timestep + time_term, 999)
+        # shift= 1.0
+        # num_train_timesteps = self.scheduler.config.num_train_timesteps
+        # timesteps = np.linspace(1, num_train_timesteps, num_train_timesteps, dtype=np.float32)[::-1].copy()
+        # timesteps = torch.from_numpy(timesteps).to(dtype=torch.float32)
 
-        sigmas = timesteps / num_train_timesteps
-        sigmas = shift * sigmas / (1 + (shift - 1) * sigmas)
+        # sigmas = timesteps / num_train_timesteps
+        # sigmas = shift * sigmas / (1 + (shift - 1) * sigmas)
 
-        self.timesteps = sigmas * num_train_timesteps
+        # self.timesteps = sigmas * num_train_timesteps
 
-        # self._step_index = None
-        # self._begin_index = None
+        # # self._step_index = None
+        # # self._begin_index = None
 
-        self.sigmas = sigmas.to("cpu")  # to avoid too much CPU/GPU communication
-        self.sigma_min = self.sigmas[-1].item()
-        self.sigma_max = self.sigmas[0].item()
-        
-        
-        s_churn = 0.0
-        s_tmin = 0.0
-        s_tmax= float("inf")
-        s_noise = 1.0
-        
-        num_inference_steps = NUM_DDIM_STEPS
-        
-        timesteps = np.linspace(
-            self._sigma_to_t(self.sigma_max), self._sigma_to_t(self.sigma_min), num_inference_steps
-        )
-
-        sigmas = timesteps / self.scheduler.config.num_train_timesteps
-        sigmas = self.scheduler.config.shift * sigmas / (1 + (self.scheduler.config.shift - 1) * sigmas)
-        sigmas = torch.from_numpy(sigmas).to(dtype=torch.float32, device=device)
-
-        timesteps = sigmas * self.scheduler.config.num_train_timesteps
-        self.timesteps = timesteps.to(device=device)
-        self.sigmas = torch.cat([sigmas, torch.zeros(1, device=sigmas.device)])
-
-        # Upcast to avoid precision issues when computing prev_sample
-        sample = sample.to(torch.float32)
+        # self.sigmas = sigmas.to("cpu")  # to avoid too much CPU/GPU communication
+        # self.sigma_min = self.sigmas[-1].item()
+        # self.sigma_max = self.sigmas[0].item()
         
         
+        # s_churn = 0.0
+        # s_tmin = 0.0
+        # s_tmax= float("inf")
+        # s_noise = 1.0
         
-        print("⭐️self.step_index", step_index)
-        num_inference_steps_1 = num_inference_steps -1 
-        num_inference_steps_1_step_index = num_inference_steps_1 - step_index
-        print("⭐️num_inference_steps_1_step_index", num_inference_steps_1_step_index)
+        # num_inference_steps = self.ddim_steps
         
-        sigma = self.sigmas[num_inference_steps_1_step_index]
+        # timesteps = np.linspace(
+        #     self._sigma_to_t(self.sigma_max), self._sigma_to_t(self.sigma_min), num_inference_steps
+        # )
 
-        gamma = min(s_churn / (len(self.sigmas) - 1), 2**0.5 - 1) if s_tmin <= sigma <= s_tmax else 0.0
+        # sigmas = timesteps / self.scheduler.config.num_train_timesteps
+        # sigmas = self.scheduler.config.shift * sigmas / (1 + (self.scheduler.config.shift - 1) * sigmas)
+        # sigmas = torch.from_numpy(sigmas).to(dtype=torch.float32, device=device)
+
+        # timesteps = sigmas * self.scheduler.config.num_train_timesteps
+        # self.timesteps = timesteps.to(device=device)
+        # self.sigmas = torch.cat([sigmas, torch.zeros(1, device=sigmas.device)])
+
+        # # Upcast to avoid precision issues when computing prev_sample
+        # sample = sample.to(torch.float32)
         
-        generator = torch.Generator("cuda").manual_seed(33)
-        noise = randn_tensor(
-            model_output.shape, dtype=model_output.dtype, device=model_output.device, generator=generator
-        )
-
-        eps = noise * s_noise
-        sigma_hat = sigma * (gamma + 1)
-
-        if gamma > 0:
-            sample = sample + eps * (sigma_hat**2 - sigma**2) ** 0.5
-
-        # 1. compute predicted original sample (x_0) from sigma-scaled predicted noise
-        # NOTE: "original_sample" should not be an expected prediction_type but is left in for
-        # backwards compatibility
-
-        # if self.config.prediction_type == "vector_field":
-
-        denoised = sample - model_output * sigma
-        # 2. Convert to an ODE derivative
-        derivative = (sample - denoised) / sigma_hat
-
-        dt = self.sigmas[step_index + 1] - sigma_hat
-
-        prev_sample = sample + derivative * dt
-        # Cast sample back to model compatible dtype
-        next_sample = prev_sample.to(model_output.dtype)
         
-        # self.scheduler._step_index += 1
+        
+        # print("⭐️self.step_index", step_index)
+        # num_inference_steps_1 = num_inference_steps -1 
+        # num_inference_steps_1_step_index = num_inference_steps_1 - step_index
+        # print("⭐️num_inference_steps_1_step_index", num_inference_steps_1_step_index)
+        
+        # sigma = self.sigmas[num_inference_steps_1_step_index]
+
+        # gamma = min(s_churn / (len(self.sigmas) - 1), 2**0.5 - 1) if s_tmin <= sigma <= s_tmax else 0.0
+        
+        # generator = torch.Generator("cuda").manual_seed(33)
+        # noise = randn_tensor(
+        #     model_output.shape, dtype=model_output.dtype, device=model_output.device, generator=generator
+        # )
+
+        # eps = noise * s_noise
+        # sigma_hat = sigma * (gamma + 1)
+
+        # if gamma > 0:
+        #     sample = sample + eps * (sigma_hat**2 - sigma**2) ** 0.5
+
+        # # 1. compute predicted original sample (x_0) from sigma-scaled predicted noise
+        # # NOTE: "original_sample" should not be an expected prediction_type but is left in for
+        # # backwards compatibility
+
+        # # if self.config.prediction_type == "vector_field":
+
+        # denoised = sample - model_output * sigma
+        # # 2. Convert to an ODE derivative
+        # derivative = (sample - denoised) / sigma_hat
+
+        # dt = self.sigmas[step_index + 1] - sigma_hat
+
+        # prev_sample = sample + derivative * dt
+        # # Cast sample back to model compatible dtype
+        # next_sample = prev_sample.to(model_output.dtype)
+        
+        # # self.scheduler._step_index += 1
  
         return next_sample
 
@@ -367,13 +378,13 @@ class NullInversion:
         
         
         
-        guidance_scale = 1 if is_forward else GUIDANCE_SCALE
+        guidance_scale = 1 if is_forward else self.guidance_scale
     
         
         # latents_input = self.model.scheduler.scale_model_input(latents_input, t)
         
         
-        
+        int_t = t
         t = t.expand(latents.shape[0])
         t=t.to(torch.float32)
         latents=latents.to(torch.float32)
@@ -400,9 +411,9 @@ class NullInversion:
         noise_pred_uncond, noise_prediction_text = noise_pred.chunk(2)
         noise_pred = noise_pred_uncond + guidance_scale * (noise_prediction_text - noise_pred_uncond)
         if is_forward:
-            latents = self.next_step(noise_pred, t, latents, step)
+            latents = self.next_step(noise_pred, int_t, latents, step)
         else:
-            latents = self.prev_step(noise_pred, t, latents, step)
+            latents = self.prev_step(noise_pred, int_t, latents, step)
         return latents
     
     
@@ -410,9 +421,10 @@ class NullInversion:
     @torch.no_grad()
     def latent2image(self, latents, return_type='np'):
         latents = (1 / self.model.vae.config.scaling_factor * latents.detach()) + self.model.vae.config.shift_factor #JH - 수정함.
-        # latents = latents.to(torch.float32)
+        latents = latents.to(torch.float32)
         
         image = self.model.vae.decode(latents)['sample']
+
         if return_type == 'np':
             image = (image / 2 + 0.5).clamp(0, 1)
             image = image.cpu().permute(0, 2, 3, 1).numpy()[0]        
@@ -545,13 +557,13 @@ class NullInversion:
         latent = latent.clone().detach()
         
         timesteps = None
-        num_inference_steps = NUM_DDIM_STEPS
+        num_inference_steps = self.ddim_steps
         timesteps, num_inference_steps = retrieve_timesteps(self.model.scheduler, num_inference_steps, device, timesteps)
         
         
-        for i in range(NUM_DDIM_STEPS):
+        for i in range(self.ddim_steps):
             
-            t = self.model.scheduler.timesteps[i].unsqueeze(0)
+            t = self.model.scheduler.timesteps[len(self.model.scheduler.timesteps) - i - 1].unsqueeze(0) #timestep: [T, T-1, ..., 1, 0] 여기서는 forward과정이므로 거꾸로 가져와야한다.
             
             #w=1인 경우는, conditional context만 적용한 것과 같으므로 get_noise_pred_single에 cond_embeddings를 넣어주면 된다.
             noise_pred = self.get_noise_pred_single(latent, t, cond_embeddings, cond_embeddings_p, add_time_ids2)
@@ -592,11 +604,10 @@ class NullInversion:
     def null_optimization(self, latents, num_inner_steps, epsilon, config):
     # def null_optimization(self, latents, num_inner_steps, epsilon):
     
+        add_time_ids1, add_time_ids2 = self.add_time_ids.chunk(2)
         uncond_embeddings_p, cond_embeddings_p = self.context_p.chunk(2)
         uncond_embeddings, cond_embeddings = self.context.chunk(2)
-        add_time_ids1, add_time_ids2 = self.add_time_ids.chunk(2)
         
-            
         uncond_embeddings_list = []
         uncond_embeddings_p_list = []
         add_time_ids1_list = []
@@ -604,14 +615,13 @@ class NullInversion:
         # print(latent_cur.size())
 
         # Set total for tqdm
-        # total_iterations = num_inner_steps * NUM_DDIM_STEPS 
-        total_iterations = NUM_DDIM_STEPS 
+        # total_iterations = num_inner_steps * self.ddim_steps 
+        total_iterations = self.ddim_steps 
         bar = tqdm(total=total_iterations)
         
         
-        for i in range(NUM_DDIM_STEPS):
-            # LR = config.learning_rate * (1. + i / 28.) #JH - 수정함.
-            # LR = config.learning_rate * (1. - i / 28.)
+        for i in range(self.ddim_steps):
+            # LR = config.learning_rate * (1. - i / self.ddim_steps)
             LR = config.learning_rate
             
             
@@ -633,7 +643,7 @@ class NullInversion:
                 optimizer = torch.optim.RMSprop([uncond_embeddings, uncond_embeddings_p], lr=LR)
             
             
-            latent_prev = latents[len(latents) - i - 2]
+            latent_prev = latents[len(latents) - i - 2] #[0, 1, ..., T-1, T] 순으로 존재하기때문에 T->0으로 가는 과정이므로 거꾸로 가져와야함
             t = self.model.scheduler.timesteps[i]
             
             
@@ -649,9 +659,10 @@ class NullInversion:
 
             for j in range(num_inner_steps):
                 noise_pred_uncond = self.get_noise_pred_single(latent_cur, t, uncond_embeddings, uncond_embeddings_p, add_time_ids1)
-                noise_pred = noise_pred_uncond + GUIDANCE_SCALE * (noise_pred_cond - noise_pred_uncond)
-                
-                latents_prev_rec = self.prev_step(noise_pred, t, latent_cur, j)
+                noise_pred = noise_pred_uncond + self.guidance_scale * (noise_pred_cond - noise_pred_uncond)
+
+                latents_prev_rec = self.prev_step(noise_pred, t, latent_cur, i) #step_index: j => i
+                #sigma는 [T, T-1, ..., 1, 0]순으로 접근하기 때문에 step_index는 i가 되어야한다.
                 # loss_fn = nn.HuberLoss()
                 loss_fn = nn.L1Loss()
                 
@@ -671,7 +682,7 @@ class NullInversion:
                 wandb.log({"Training loss": loss_item})
                 
                 # 현재 loss가 지금까지의 best loss보다 낮으면 업데이트
-                if loss_item < best_loss:
+                if loss_item <= best_loss:
                     best_loss = loss_item
                     best_uncond_embeddings = uncond_embeddings.detach().clone()
                     best_uncond_embeddings_p = uncond_embeddings_p.detach().clone()
@@ -681,8 +692,8 @@ class NullInversion:
 
             # 내부 루프가 끝난 후, 가장 낮은 loss를 가진 embeddings를 저장
             if best_uncond_embeddings is not None:
-                uncond_embeddings_list.append(best_uncond_embeddings[:1])
-                uncond_embeddings_p_list.append(best_uncond_embeddings_p[:1])
+                uncond_embeddings_list.append(best_uncond_embeddings[:1].detach())
+                uncond_embeddings_p_list.append(best_uncond_embeddings_p[:1].detach())
                 print(f"🌊 최저 loss에서의 embeddings 저장됨 Step {i}, Loss: {best_loss:.4f}")
             else:
                 print(f"🌊 Step {i}에서 유효한 embeddings를 찾지 못했습니다.")
@@ -719,10 +730,13 @@ class NullInversion:
         return (image_gt, image_rec), ddim_latents[-1], uncond_embeddings, uncond_embeddings_p
 
 
-    def __init__(self, model):
+    def __init__(self, model, ddim_steps, guidance_scale):
+        scheduler = DDIMScheduler(beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear", clip_sample=False, set_alpha_to_one=False)
+        self.ddim_steps = ddim_steps
+        self.guidance_scale = guidance_scale
         self.model = model
         self.tokenizer = self.model.tokenizer
-        self.model.scheduler.set_timesteps(NUM_DDIM_STEPS)
+        self.model.scheduler.set_timesteps(self.ddim_steps)
         self.prompt = None
         self.add_time_ids = None
         self.context = None
